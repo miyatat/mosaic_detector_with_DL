@@ -1,0 +1,4 @@
+__pycache__
+gomi*
+logs*
+model.ckpt*

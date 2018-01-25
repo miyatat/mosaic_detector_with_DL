@@ -7,14 +7,7 @@ import math
 import skimage
 import skimage.io
 
-IMAGE_HEIGHT = 360
-IMAGE_WIDTH = 480
-IMAGE_DEPTH = 3
-
-NUM_CLASSES = 11
-NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 367
-NUM_EXAMPLES_PER_EPOCH_FOR_TEST = 101
-NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 1
+NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = -1 #適当な初期値。
 
 def _generate_image_and_label_batch(image, label, min_queue_examples,
                                     batch_size, shuffle):
@@ -54,24 +47,24 @@ def _generate_image_and_label_batch(image, label, min_queue_examples,
 
   return images, label_batch
 
-def CamVid_reader_seq(filename_queue, seq_length):
-  image_seq_filenames = tf.split(axis=0, num_or_size_splits=seq_length, value=filename_queue[0])
-  label_seq_filenames = tf.split(axis=0, num_or_size_splits=seq_length, value=filename_queue[1])
+#def CamVid_reader_seq(filename_queue, seq_length):
+#  image_seq_filenames = tf.split(axis=0, num_or_size_splits=seq_length, value=filename_queue[0])
+#  label_seq_filenames = tf.split(axis=0, num_or_size_splits=seq_length, value=filename_queue[1])
+#
+#  image_seq = []
+#  label_seq = []
+#  for im ,la in zip(image_seq_filenames, label_seq_filenames):
+#    imageValue = tf.read_file(tf.squeeze(im))
+#    labelValue = tf.read_file(tf.squeeze(la))
+#    image_bytes = tf.image.decode_png(imageValue)
+#    label_bytes = tf.image.decode_png(labelValue)
+#    image = tf.cast(tf.reshape(image_bytes, (IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_DEPTH)), tf.float32)
+#    label = tf.cast(tf.reshape(label_bytes, (IMAGE_HEIGHT, IMAGE_WIDTH, 1)), tf.int64)
+#    image_seq.append(image)
+#    label_seq.append(label)
+#  return image_seq, label_seq
 
-  image_seq = []
-  label_seq = []
-  for im ,la in zip(image_seq_filenames, label_seq_filenames):
-    imageValue = tf.read_file(tf.squeeze(im))
-    labelValue = tf.read_file(tf.squeeze(la))
-    image_bytes = tf.image.decode_png(imageValue)
-    label_bytes = tf.image.decode_png(labelValue)
-    image = tf.cast(tf.reshape(image_bytes, (IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_DEPTH)), tf.float32)
-    label = tf.cast(tf.reshape(label_bytes, (IMAGE_HEIGHT, IMAGE_WIDTH, 1)), tf.int64)
-    image_seq.append(image)
-    label_seq.append(label)
-  return image_seq, label_seq
-
-def CamVid_reader(filename_queue):
+def CamVid_reader(FLAGS, filename_queue):
 
   image_filename = filename_queue[0]
   label_filename = filename_queue[1]
@@ -82,8 +75,8 @@ def CamVid_reader(filename_queue):
   image_bytes = tf.image.decode_png(imageValue)
   label_bytes = tf.image.decode_png(labelValue)
 
-  image = tf.reshape(image_bytes, (IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_DEPTH))
-  label = tf.reshape(label_bytes, (IMAGE_HEIGHT, IMAGE_WIDTH, 1))
+  image = tf.reshape(image_bytes, (FLAGS.image_h, FLAGS.image_w, FLAGS.image_c))
+  label = tf.reshape(label_bytes, (FLAGS.image_h, FLAGS.image_w, 1))
 
   return image, label
 
@@ -98,15 +91,20 @@ def get_filename_list(path):
     label_filenames.append(i[1])
   return image_filenames, label_filenames
 
-def CamVidInputs(image_filenames, label_filenames, batch_size):
+def CamVidInputs(FLAGS, image_filenames, label_filenames, batch_size):
 
   images = ops.convert_to_tensor(image_filenames, dtype=dtypes.string)
   labels = ops.convert_to_tensor(label_filenames, dtype=dtypes.string)
 
   filename_queue = tf.train.slice_input_producer([images, labels], shuffle=True)
 
-  image, label = CamVid_reader(filename_queue)
+  image, label = CamVid_reader(FLAGS, filename_queue)
   reshaped_image = tf.cast(image, tf.float32)
+
+  #一番最初に呼び出されたとき(train用に呼び出されたとき)のみ値をセット。
+  global NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN
+  if NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN<=0:
+    NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = int(images.get_shape().as_list()[0])
 
   min_fraction_of_examples_in_queue = 0.4
   min_queue_examples = int(NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN *

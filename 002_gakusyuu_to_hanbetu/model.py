@@ -16,22 +16,6 @@ from Inputs import *
 
 # Constants describing the training process.
 MOVING_AVERAGE_DECAY = 0.9999     # The decay to use for the moving average.
-NUM_EPOCHS_PER_DECAY = 350.0      # Epochs after which learning rate decays.
-LEARNING_RATE_DECAY_FACTOR = 0.1  # Learning rate decay factor.
-
-INITIAL_LEARNING_RATE = 0.001      # Initial learning rate.
-EVAL_BATCH_SIZE = 5
-BATCH_SIZE = 5
-# for CamVid
-IMAGE_HEIGHT = 360
-IMAGE_WIDTH = 480
-IMAGE_DEPTH = 3
-
-NUM_CLASSES = 12
-NUM_EXAMPLES_PER_EPOCH_FOR_TRAIN = 367
-NUM_EXAMPLES_PER_EPOCH_FOR_TEST = 101
-NUM_EXAMPLES_PER_EPOCH_FOR_EVAL = 1
-TEST_ITER = NUM_EXAMPLES_PER_EPOCH_FOR_TEST / BATCH_SIZE
 
 def msra_initializer(kl, dl):
     """
@@ -53,20 +37,20 @@ def orthogonal_initializer(scale = 1.1):
       return tf.constant(scale * q[:shape[0], :shape[1]], dtype=tf.float32)
     return _initializer
 
-def loss(logits, labels):
-  """
-      loss func without re-weighting
-  """
-  # Calculate the average cross entropy loss across the batch.
-  logits = tf.reshape(logits, (-1,NUM_CLASSES))
-  labels = tf.reshape(labels, [-1])
-
-  cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
-      logits=logits, labels=labels, name='cross_entropy_per_example')
-  cross_entropy_mean = tf.reduce_mean(cross_entropy, name='cross_entropy')
-  tf.add_to_collection('losses', cross_entropy_mean)
-
-  return tf.add_n(tf.get_collection('losses'), name='total_loss')
+#def loss(logits, labels):
+#  """
+#      loss func without re-weighting
+#  """
+#  # Calculate the average cross entropy loss across the batch.
+#  logits = tf.reshape(logits, (-1,NUM_CLASSES))
+#  labels = tf.reshape(labels, [-1])
+#
+#  cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
+#      logits=logits, labels=labels, name='cross_entropy_per_example')
+#  cross_entropy_mean = tf.reduce_mean(cross_entropy, name='cross_entropy')
+#  tf.add_to_collection('losses', cross_entropy_mean)
+#
+#  return tf.add_n(tf.get_collection('losses'), name='total_loss')
 
 def weighted_loss(logits, labels, num_classes, head=None):
     """ median-frequency re-weighting """
@@ -96,24 +80,18 @@ def weighted_loss(logits, labels, num_classes, head=None):
 
     return loss
 
-def cal_loss(logits, labels):
-    loss_weight = np.array([
-      0.2595,
-      0.1826,
-      4.5640,
-      0.1417,
-      0.9051,
-      0.3826,
-      9.6446,
-      1.8418,
-      0.6823,
-      6.2478,
-      7.3614,
-      1.0974]) # class 0~11
+def cal_loss(FLAGS, logits, labels):
+    if FLAGS.loss_weight[0]!='[' or FLAGS.loss_weight[-1]!=']' :
+      print('error. illegal loss_weight format.')
+      import sys; sys.exit(1)
+    loss_weight = np.array(FLAGS.loss_weight[1:-1].split(',')).astype(np.float)
+    if len(loss_weight) != FLAGS.num_classes :
+      print('error. illegal loss_weight length.')
+      import sys; sys.exit(1)
 
     labels = tf.cast(labels, tf.int32)
     # return loss(logits, labels)
-    return weighted_loss(logits, labels, num_classes=NUM_CLASSES, head=loss_weight)
+    return weighted_loss(logits, labels, num_classes=FLAGS.num_classes, head=loss_weight)
 
 def conv_layer_with_bn(inputT, shape, train_phase, activation=True, name=None):
     in_channel = shape[2]
@@ -171,7 +149,7 @@ def batch_norm_layer(inputT, is_training, scope):
                            updates_collections=None, center=False, scope=scope+"_bn", reuse = True))
 
 
-def inference(images, labels, batch_size, phase_train):
+def inference(FLAGS, images, labels, batch_size, phase_train):
     # norm1
     norm1 = tf.nn.lrn(images, depth_radius=5, bias=1.0, alpha=0.0001, beta=0.75,
                 name='norm1')
@@ -230,23 +208,21 @@ def inference(images, labels, batch_size, phase_train):
     # output predicted class number (6)
     with tf.variable_scope('conv_classifier') as scope:
       kernel = _variable_with_weight_decay('weights',
-                                           shape=[1, 1, 64, NUM_CLASSES],
+                                           shape=[1, 1, 64, FLAGS.num_classes],
                                            initializer=msra_initializer(1, 64),
                                            wd=0.0005)
       conv = tf.nn.conv2d(conv_decode1, kernel, [1, 1, 1, 1], padding='SAME')
-      biases = _variable_on_cpu('biases', [NUM_CLASSES], tf.constant_initializer(0.0))
+      biases = _variable_on_cpu('biases', [FLAGS.num_classes], tf.constant_initializer(0.0))
       conv_classifier = tf.nn.bias_add(conv, biases, name=scope.name)
 
     logit = conv_classifier
-    loss = cal_loss(conv_classifier, labels)
+    loss = cal_loss(FLAGS, conv_classifier, labels)
 
     return loss, logit
 
-def train(total_loss, global_step):
-    total_sample = 274
-    num_batches_per_epoch = 274/1
+def train(FLAGS, total_loss, global_step):
     """ fix lr """
-    lr = INITIAL_LEARNING_RATE
+    lr = FLAGS.learning_rate
     loss_averages_op = _add_loss_summaries(total_loss)
 
     # Compute gradients.
@@ -275,28 +251,28 @@ def train(total_loss, global_step):
     return train_op
 
 def test(FLAGS):
-  max_steps = FLAGS.max_steps
+  iterations = FLAGS.iterations
   batch_size = FLAGS.batch_size
   train_dir = FLAGS.log_dir # /tmp3/first350/TensorFlow/Logs
-  test_dir = FLAGS.test_dir # /tmp3/first350/SegNet-Tutorial/CamVid/train.txt
-  test_ckpt = FLAGS.testing
+  test_image_list = FLAGS.test_image_list # /tmp3/first350/SegNet-Tutorial/CamVid/train.txt
+  test_ckpt = FLAGS.ckpt_for_test
   image_w = FLAGS.image_w
   image_h = FLAGS.image_h
   image_c = FLAGS.image_c
-  # testing should set BATCH_SIZE = 1
+  # test should set batch_size = 1
   batch_size = 1
 
-  image_filenames, label_filenames = get_filename_list(test_dir)
+  image_filenames, label_filenames = get_filename_list(test_image_list)
 
   test_data_node = tf.placeholder(
         tf.float32,
         shape=[batch_size, image_h, image_w, image_c])
 
-  test_labels_node = tf.placeholder(tf.int64, shape=[batch_size, 360, 480, 1])
+  test_labels_node = tf.placeholder(tf.int64, shape=[batch_size, image_h, image_w, 1])
 
   phase_train = tf.placeholder(tf.bool, name='phase_train')
 
-  loss, logits = inference(test_data_node, test_labels_node, batch_size, phase_train)
+  loss, logits = inference(FLAGS, test_data_node, test_labels_node, batch_size, phase_train)
 
   pred = tf.argmax(logits, axis=3)
   # get moving avg
@@ -315,9 +291,10 @@ def test(FLAGS):
     images, labels = get_all_test_data(image_filenames, label_filenames)
 
     threads = tf.train.start_queue_runners(sess=sess)
-    hist = np.zeros((NUM_CLASSES, NUM_CLASSES))
+    hist = np.zeros((FLAGS.num_classes, FLAGS.num_classes))
+    i=-1
     for image_batch, label_batch  in zip(images, labels):
-
+      i+=1
       feed_dict = {
         test_data_node: image_batch,
         test_labels_node: label_batch,
@@ -327,8 +304,7 @@ def test(FLAGS):
       dense_prediction, im = sess.run([logits, pred], feed_dict=feed_dict)
       # output_image to verify
       if (FLAGS.save_image):
-          writeImage(im[0], 'testing_image.png')
-          # writeImage(im[0], 'out_image/'+str(image_filenames[count]).split('/')[-1])
+          writeImage(FLAGS, im[0], str(image_filenames[i]).rstrip('.png')+'_hanteikekka.png')
 
       hist += get_hist(dense_prediction, label_batch)
       # count+=1
@@ -338,20 +314,22 @@ def test(FLAGS):
     print("mean IU: ", np.nanmean(iu))
 
 def training(FLAGS, is_finetune=False):
-  max_steps = FLAGS.max_steps
+  iterations = FLAGS.iterations
   batch_size = FLAGS.batch_size
   train_dir = FLAGS.log_dir # /tmp3/first350/TensorFlow/Logs
-  image_dir = FLAGS.image_dir # /tmp3/first350/SegNet-Tutorial/CamVid/train.txt
-  val_dir = FLAGS.val_dir # /tmp3/first350/SegNet-Tutorial/CamVid/val.txt
-  finetune_ckpt = FLAGS.finetune
+  train_image_list = FLAGS.train_image_list # /tmp3/first350/SegNet-Tutorial/CamVid/train.txt
+  val_image_list = FLAGS.val_image_list # /tmp3/first350/SegNet-Tutorial/CamVid/val.txt
+  ckpt_for_finetune = FLAGS.ckpt_for_finetune
   image_w = FLAGS.image_w
   image_h = FLAGS.image_h
   image_c = FLAGS.image_c
   # should be changed if your model stored by different convention
-  startstep = 0 if not is_finetune else int(FLAGS.finetune.split('-')[-1])
+  startstep = 0 if not is_finetune else int(FLAGS.ckpt_for_finetune.split('-')[-1])
 
-  image_filenames, label_filenames = get_filename_list(image_dir)
-  val_image_filenames, val_label_filenames = get_filename_list(val_dir)
+  image_filenames, label_filenames = get_filename_list(train_image_list)
+  val_image_filenames, val_label_filenames = get_filename_list(val_image_list)
+
+  val_iter = int(len(val_image_filenames)/FLAGS.batch_size)
 
   with tf.Graph().as_default():
 
@@ -364,15 +342,15 @@ def training(FLAGS, is_finetune=False):
     global_step = tf.Variable(0, trainable=False)
 
     # For CamVid
-    images, labels = CamVidInputs(image_filenames, label_filenames, batch_size)
+    images, labels = CamVidInputs(FLAGS, image_filenames, label_filenames, batch_size)
 
-    val_images, val_labels = CamVidInputs(val_image_filenames, val_label_filenames, batch_size)
+    val_images, val_labels = CamVidInputs(FLAGS, val_image_filenames, val_label_filenames, batch_size)
 
     # Build a Graph that computes the logits predictions from the inference model.
-    loss, eval_prediction = inference(train_data_node, train_labels_node, batch_size, phase_train)
+    loss, eval_prediction = inference(FLAGS, train_data_node, train_labels_node, batch_size, phase_train)
 
     # Build a Graph that trains the model with one batch of examples and updates the model parameters.
-    train_op = train(loss, global_step)
+    train_op = train(FLAGS, loss, global_step)
 
     saver = tf.train.Saver(tf.global_variables())
 
@@ -383,7 +361,7 @@ def training(FLAGS, is_finetune=False):
     with tf.Session() as sess:
       # Build an initialization operation to run below.
       if (is_finetune == True):
-          saver.restore(sess, finetune_ckpt )
+          saver.restore(sess, ckpt_for_finetune )
       else:
           init = tf.global_variables_initializer()
           sess.run(init)
@@ -401,7 +379,7 @@ def training(FLAGS, is_finetune=False):
       acc_summary = tf.summary.scalar("test_accuracy", acc_pl)
       iu_summary = tf.summary.scalar("Mean_IU", iu_pl)
 
-      for step in range(startstep, startstep + max_steps):
+      for step in range(startstep, startstep + iterations):
         image_batch ,label_batch = sess.run([images, labels])
         # since we still use mini-batches in validation, still set bn-layer phase_train = True
         feed_dict = {
@@ -433,8 +411,8 @@ def training(FLAGS, is_finetune=False):
         if step % 100 == 0:
           print("start validating.....")
           total_val_loss = 0.0
-          hist = np.zeros((NUM_CLASSES, NUM_CLASSES))
-          for test_step in range(int(TEST_ITER)):
+          hist = np.zeros((FLAGS.num_classes, FLAGS.num_classes))
+          for test_step in range(int(val_iter)):
             val_images_batch, val_labels_batch = sess.run([val_images, val_labels])
 
             _val_loss, _val_pred = sess.run([loss, eval_prediction], feed_dict={
@@ -444,10 +422,10 @@ def training(FLAGS, is_finetune=False):
             })
             total_val_loss += _val_loss
             hist += get_hist(_val_pred, val_labels_batch)
-          print("val loss: ", total_val_loss / TEST_ITER)
+          print("val loss: ", total_val_loss / val_iter)
           acc_total = np.diag(hist).sum() / hist.sum()
           iu = np.diag(hist) / (hist.sum(1) + hist.sum(0) - np.diag(hist))
-          test_summary_str = sess.run(average_summary, feed_dict={average_pl: total_val_loss / TEST_ITER})
+          test_summary_str = sess.run(average_summary, feed_dict={average_pl: total_val_loss / val_iter})
           acc_summary_str = sess.run(acc_summary, feed_dict={acc_pl: acc_total})
           iu_summary_str = sess.run(iu_summary, feed_dict={iu_pl: np.nanmean(iu)})
           print_hist_summery(hist)
@@ -459,7 +437,7 @@ def training(FLAGS, is_finetune=False):
           summary_writer.add_summary(acc_summary_str, step)
           summary_writer.add_summary(iu_summary_str, step)
         # Save the model checkpoint periodically.
-        if step % 1000 == 0 or (step + 1) == max_steps:
+        if step % 100 == 0 or (step + 1) == iterations:
           checkpoint_path = os.path.join(train_dir, 'model.ckpt')
           saver.save(sess, checkpoint_path, global_step=step)
 

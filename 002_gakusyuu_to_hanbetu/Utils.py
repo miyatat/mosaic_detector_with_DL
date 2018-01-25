@@ -84,7 +84,7 @@ def _variable_with_weight_decay(name, shape, initializer, wd):
     tf.add_to_collection('losses', weight_decay)
   return var
 
-def writeImage(image, filename):
+def writeImage(FLAGS, image, filename):
     """ store label data to colored image """
     Sky = [128,128,128]
     Building = [128,0,0]
@@ -102,8 +102,10 @@ def writeImage(image, filename):
     r = image.copy()
     g = image.copy()
     b = image.copy()
-    label_colours = np.array([Sky, Building, Pole, Road_marking, Road, Pavement, Tree, SignSymbol, Fence, Car, Pedestrian, Bicyclist, Unlabelled])
-    for l in range(0,12):
+    label_colours = np.array([Sky, Building, Pole, Road_marking, Road, Pavement, Tree, SignSymbol, Fence, Car, Pedestrian, Bicyclist])
+    label_colours[FLAGS.num_classes] = Unlabelled
+    label_colours = label_colours[:FLAGS.num_classes+1]
+    for l in range(0,len(label_colours)):
         r[image==l] = label_colours[l,0]
         g[image==l] = label_colours[l,1]
         b[image==l] = label_colours[l,2]
@@ -114,26 +116,26 @@ def writeImage(image, filename):
     im = Image.fromarray(np.uint8(rgb))
     im.save(filename)
 
-def storeImageQueue(data, labels, step):
-  """ data and labels are all numpy arrays """
-  for i in range(BATCH_SIZE):
-    index = 0
-    im = data[i]
-    la = labels[i]
-    im = Image.fromarray(np.uint8(im))
-    im.save("batch_im_s%d_%d.png"%(step,i))
-    writeImage(np.reshape(la,(360,480)), "batch_la_s%d_%d.png"%(step,i))
+#def storeImageQueue(data, labels, step):
+#  """ data and labels are all numpy arrays """
+#  for i in range(BATCH_SIZE):
+#    index = 0
+#    im = data[i]
+#    la = labels[i]
+#    im = Image.fromarray(np.uint8(im))
+#    im.save("batch_im_s%d_%d.png"%(step,i))
+#    writeImage(np.reshape(la,(360,480)), "batch_la_s%d_%d.png"%(step,i))
 
 def fast_hist(a, b, n):
     k = (a >= 0) & (a < n)
     return np.bincount(n * a[k].astype(int) + b[k], minlength=n**2).reshape(n, n)
 
 def get_hist(predictions, labels):
-  num_class = predictions.shape[3]
+  num_classes = predictions.shape[3]
   batch_size = predictions.shape[0]
-  hist = np.zeros((num_class, num_class))
+  hist = np.zeros((num_classes, num_classes))
   for i in range(batch_size):
-    hist += fast_hist(labels[i].flatten(), predictions[i].argmax(2).flatten(), num_class)
+    hist += fast_hist(labels[i].flatten(), predictions[i].argmax(2).flatten(), num_classes)
   return hist
 
 def print_hist_summery(hist):
@@ -151,15 +153,15 @@ def print_hist_summery(hist):
 def per_class_acc(predictions, label_tensor):
     labels = label_tensor
     size = predictions.shape[0]
-    num_class = predictions.shape[3]
-    hist = np.zeros((num_class, num_class))
+    num_classes = predictions.shape[3]
+    hist = np.zeros((num_classes, num_classes))
     for i in range(size):
-      hist += fast_hist(labels[i].flatten(), predictions[i].argmax(2).flatten(), num_class)
+      hist += fast_hist(labels[i].flatten(), predictions[i].argmax(2).flatten(), num_classes)
     acc_total = np.diag(hist).sum() / hist.sum()
     print ('accuracy = %f'%np.nanmean(acc_total))
     iu = np.diag(hist) / (hist.sum(1) + hist.sum(0) - np.diag(hist))
     print ('mean IU  = %f'%np.nanmean(iu))
-    for ii in range(num_class):
+    for ii in range(num_classes):
         if float(hist.sum(1)[ii]) == 0:
           acc = 0.0
         else:

@@ -3,47 +3,55 @@ import model
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('testing', '', """ checkpoint file """)
-tf.app.flags.DEFINE_string('finetune', '', """ finetune checkpoint file """)
+tf.app.flags.DEFINE_string('ckpt_for_test', '', """ checkpoint file for test""")
+tf.app.flags.DEFINE_string('ckpt_for_finetune', '', """ checkpoint file for finetune""")
 tf.app.flags.DEFINE_integer('batch_size', "5", """ batch_size """)
-tf.app.flags.DEFINE_float('learning_rate', "1e-3", """ initial lr """)
-tf.app.flags.DEFINE_string('log_dir', "/tmp3/first350/TensorFlow/Logs", """ dir to store ckpt """)
-tf.app.flags.DEFINE_string('image_dir', "/tmp3/first350/SegNet-Tutorial/CamVid/train.txt", """ path to CamVid image """)
-tf.app.flags.DEFINE_string('test_dir', "/tmp3/first350/SegNet-Tutorial/CamVid/test.txt", """ path to CamVid test image """)
-tf.app.flags.DEFINE_string('val_dir', "/tmp3/first350/SegNet-Tutorial/CamVid/val.txt", """ path to CamVid val image """)
-tf.app.flags.DEFINE_integer('max_steps', "20000", """ max_steps """)
+tf.app.flags.DEFINE_float('learning_rate', "0.001", """ initial lr """)
+tf.app.flags.DEFINE_string('log_dir', "./Logs", """ dir to store ckpt """)
+tf.app.flags.DEFINE_string('train_image_list', "./filelist_train.txt", """ path to CamVid image """)
+tf.app.flags.DEFINE_string('test_image_list', "./filelist_test.txt", """ path to CamVid test image """)
+tf.app.flags.DEFINE_string('val_image_list', "./filelist_val.txt", """ path to CamVid val image """)
+tf.app.flags.DEFINE_integer('iterations', "20000", """ iteration """)
 tf.app.flags.DEFINE_integer('image_h', "360", """ image height """)
 tf.app.flags.DEFINE_integer('image_w', "480", """ image width """)
 tf.app.flags.DEFINE_integer('image_c', "3", """ image channel (RGB) """)
-tf.app.flags.DEFINE_integer('num_class', "11", """ total class number """)
 tf.app.flags.DEFINE_boolean('save_image', True, """ whether to save predicted image """)
+tf.app.flags.DEFINE_integer('num_classes', "3", """ total class number """)
+tf.app.flags.DEFINE_string('loss_weight', '[0.1,0.2,2.0]', """ weight balancing """)
 
 def checkArgs():
-    if FLAGS.testing != '':
-        print('The model is set to Testing')
-        print("check point file: %s"%FLAGS.testing)
-        print("CamVid testing dir: %s"%FLAGS.test_dir)
-    elif FLAGS.finetune != '':
-        print('The model is set to Finetune from ckpt')
-        print("check point file: %s"%FLAGS.finetune)
-        print("CamVid Image dir: %s"%FLAGS.image_dir)
-        print("CamVid Val dir: %s"%FLAGS.val_dir)
+    if FLAGS.ckpt_for_test != '':
+        print('The mode is set to Testing')
+        print("check point file: %s"%FLAGS.ckpt_for_test)
+        print("test image file list: %s"%FLAGS.test_image_list)
+        print("save image: %s", FLAGS.save_image)
+    elif FLAGS.ckpt_for_finetune != '':
+        print('The mode is set to Finetune from ckpt')
+        print("training Iteration: %d"%FLAGS.iterations)
+        print("check point file: %s"%FLAGS.ckpt_for_finetune)
+        print("train image file list: %s"%FLAGS.train_image_list)
+        print("val image file list: %s"%FLAGS.val_image_list)
     else:
-        print('The model is set to Training')
-        print("Max training Iteration: %d"%FLAGS.max_steps)
+        print('The mode is set to Training')
+        print("training Iteration: %d"%FLAGS.iterations)
         print("Initial lr: %f"%FLAGS.learning_rate)
-        print("CamVid Image dir: %s"%FLAGS.image_dir)
-        print("CamVid Val dir: %s"%FLAGS.val_dir)
+        print("train image file list: %s"%FLAGS.train_image_list)
+        print("val image file list: %s"%FLAGS.val_image_list)
 
     print("Batch Size: %d"%FLAGS.batch_size)
     print("Log dir: %s"%FLAGS.log_dir)
+    print("image H: %d"%FLAGS.image_h)
+    print("image W: %d"%FLAGS.image_w)
+    print("image C: %d"%FLAGS.image_c)
+    print("Num Classes: %d"%FLAGS.num_classes)
+    print("loss_weight: %s"%FLAGS.loss_weight)
 
 
 def main(args):
     checkArgs()
-    if FLAGS.testing:
+    if FLAGS.ckpt_for_test:
         model.test(FLAGS)
-    elif FLAGS.finetune:
+    elif FLAGS.ckpt_for_finetune:
         model.training(FLAGS, is_finetune=True)
     else:
         model.training(FLAGS, is_finetune=False)
