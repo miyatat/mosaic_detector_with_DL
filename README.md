@@ -7,6 +7,10 @@ semantic segmentationについては以下等参照。
 * http://postd.cc/semantic-segmentation-deep-learning-review/
 * https://www.slideshare.net/takmin/semantic-segmentation
 
+FCNやDeepLab等いろいろなネットワークがあるが、TensorFlowでの実装があり動作させられた  
+SegNetのものを利用する。  
+SegNetの元論文。
+* https://arxiv.org/abs/1511.00561
 以下のコードを拝借。
 * https://github.com/tkuanlun350/Tensorflow-SegNet
 
