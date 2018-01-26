@@ -2,14 +2,14 @@
 * https://qiita.com/summer4an/items/306acc5d38169f880ba8
 * https://github.com/summer4an/mosaic_detector
 
-Deep Learning CNNのsemantic segmentationを使った。
+Deep Learning CNNのsemantic segmentationを使った。  
 semantic segmentationについては以下等参照。
 * http://postd.cc/semantic-segmentation-deep-learning-review/
 * https://www.slideshare.net/takmin/semantic-segmentation
 
-FCNやDeepLab等いろいろなネットワークがあるが、TensorFlowでの実装があり動作させられた  
+FCNやDeepLab等いろいろなネットワークがあるが、TensorFlowでの実装があり動作させられた  
 SegNetのものを利用する。  
-SegNetの元論文。
+SegNetの元論文は以下。
 * https://arxiv.org/abs/1511.00561
 以下のコードを拝借。
 * https://github.com/tkuanlun350/Tensorflow-SegNet
