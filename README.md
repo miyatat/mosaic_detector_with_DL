@@ -11,6 +11,7 @@ FCNやDeepLab等いろいろなネットワークがあるが、TensorFlowでの
 SegNetのものを利用する。  
 SegNetの元論文は以下。
 * https://arxiv.org/abs/1511.00561
+
 以下のコードを拝借。
 * https://github.com/tkuanlun350/Tensorflow-SegNet
 

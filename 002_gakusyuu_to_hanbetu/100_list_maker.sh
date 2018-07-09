@@ -12,19 +12,18 @@
 #  (セグメンテーションしたいファイル) (答えのファイル)
 
 
-\rm -f /tmp/tempfile.txt
+\rm -f ./tmp/tempfile.txt
 
 echo
 echo "target directory is $1"
 
-find "$1" -name '*_answer.png' > /tmp/tempfile.txt
-sed -i 's|\(.*\)_answer.png|\1_mosaic.png \0|g' /tmp/tempfile.txt
-num=`wc -l /tmp/tempfile.txt | awk '{print $1}'`
+find "$1" -name '*_answer.png' > ./tmp/tempfile.txt
+sed -i 's|\(.*\)_answer.png|\1_mosaic.png \0|g' './tmp/tempfile.txt' num=`wc -l './tmp/tempfile.txt' | awk '{print $1}'`
 
 echo
 echo "done. file num is $num"
 echo
-echo "please divide /tmp/tempfile.txt for train and validation. do like below."
-echo "  split -l 1000 /tmp/tempfile.txt; mv xaa filelist_train.txt; mv xab filelist_val.txt; cp filelist_val.txt filelist_test.txt"
+echo "please divide ./tmp/tempfile.txt for train and validation. do like below."
+echo "  split -l 1000 ./tmp/tempfile.txt; mv xaa filelist_train.txt; mv xab filelist_val.txt; cp filelist_val.txt filelist_test.txt"
 
 
