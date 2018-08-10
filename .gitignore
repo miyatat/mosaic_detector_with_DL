@@ -1,4 +1,6 @@
 *.png
+*.jpg
 *.pyc
 *.txt
+*.zip
 detect_mosaic/sandbox/*
